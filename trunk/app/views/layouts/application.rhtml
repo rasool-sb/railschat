@@ -1,0 +1,44 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="jp" lang="jp">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>Rails Chat<%= @subtitles %></title>
+    <%= javascript_include_tag 'prototype' %>
+    <%= javascript_include_tag 'prettify' %>
+    <%- if controller.action_name == 'index' -%>
+    <%= javascript_include_tag 'effects' %>
+    <%= javascript_include_tag 'moo.fx.js' %> 
+    <%= javascript_include_tag 'moo.fx.utils.js' %>
+    <%= javascript_include_tag "juggernaut_javascript" %>
+    <%= javascript_include_tag "JavaScriptFlashGateway.js" %>
+    <%- end -%>
+    <%= javascript_include_tag 'application' %>
+    <%= stylesheet_link_tag 'default' %>
+    <%= stylesheet_link_tag 'prettify' %>
+    <%= auto_discovery_link_tag(:rss, {:controller => 'archive', :action => 'feed'})%>
+  </head>
+  <body>
+    <h1><%= link_to "Rails Chat#{@subtitles}", :action => 'index', :controller => 'chat' %></h1>
+
+    <div id="container">
+<%= yield  %>
+    </div>
+
+    <div id="footer">
+      <ul>
+        <li>
+          投稿されたメッセージはアーカイブとして保存・公開されます。<br />
+          アーカイブに表示したくない場合は、入力するメッセージの一文字目に<code>#</code>を入れてください。(通称：オフレコモード)<br />
+          また、オフレコが続く場合は<code>=begin</code>と入力して送信すると、以後すべてオフレコ扱いになります。その後、<code>=end</code>
+          を送信すると通常モードに戻ります。さらに、<code>__END__</code>を入力して送信すると、ログアウト(閉じるorリロード)するまで全てオフレコ扱いになります。
+        </li>
+        <li>Rubyのコードを書き込む場合は、一行メッセージの一文字目に<code>=rb</code>を入力し、下のテキストエリア（複数行）にコードを書き込んでください。(通称：Rubyモード)</li>
+      </ul>
+      <p>project site: <a href="http://rc.trac.arton.no-ip.info/trac/">Rails Chat - Trac</a>.
+        powerd by <a href="http://www.rubyonrails.org/">Ruby on Rails</a> and 
+        <a href="http://rc.trac.arton.no-ip.info/index.fcgi/wiki/TigerBaumKuchen">TigerBaumKuchen</a> 
+        ( <a href="http://juggernaut.rubyforge.org/">Juggernaut</a> ).
+      </p>
+    </div>
+  </body>
+</html>

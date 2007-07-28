@@ -1,0 +1,3 @@
+<%- range = @messages.values_at(0,-1).compact.map(&:id).uniq * '-' -%>
+<%- @subtitles = " - Permalink #" + range -%>
+<%= render :partial => "chat/message", :collection => @messages %>

@@ -1,0 +1,331 @@
+#!/usr/bin/env ruby 
+
+#Copyright (c) 2006 arton
+
+# HTTP Push Server
+#
+#Copyright (c) 2006 Alexander MacCaw
+
+# based on httpd daemon V 1.8 by Hipster: 
+# http://www.xs4all.nl/~hipster
+#
+# Copyright (C) 2000-2004  Michel van de Ven <hipster@xs4all.nl>
+# Copyright (C) 2004  Patric Mueller <bhaak@gmx.net>
+
+#Permission is hereby granted, free of charge, to any person obtaining
+#a copy of this software and associated documentation files (the
+#"Software"), to deal in the Software without restriction, including
+#without limitation the rights to use, copy, modify, merge, publish,
+#distribute, sublicense, and/or sell copies of the Software, and to
+#permit persons to whom the Software is furnished to do so, subject to
+#the following conditions:
+
+#The above copyright notice and this permission notice shall be
+#included in all copies or substantial portions of the Software.
+
+#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+#EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+#MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+#NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+#LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+#OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+#WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+require "socket"
+require "thread"
+require "logger"
+require "yaml"
+require "monitor"
+require 'base64'
+begin
+  require "json"
+rescue LoadError
+  require "rubygems"
+  require "json"
+end
+
+RAILS_ROOT = File.join(File.dirname(__FILE__), '..')
+APP_CONFIG = YAML::load(File.open("#{RAILS_ROOT}/config/juggernaut_config.yml"))
+
+class Channel < Monitor
+
+  attr_reader :name, :requests
+
+  def initialize channel_name
+    @name=channel_name
+    @requests=[]
+    super()
+  end
+
+  #how many requests are listening to the channel?
+  def number_requests
+    return @requests.length
+  end
+  
+  def subscribe request
+    synchronize do
+      request.num_subscribes+=1
+      @requests.push request
+    end
+  end
+  
+  #remove request from channel
+  def unsubscribe request
+    return unless @requests.find{|req| req==request }
+    synchronize do
+      request.num_subscribes-=1
+      @requests.delete request
+    end  
+  end
+    
+  def send_message(msg, client)
+    unless @requests.empty?
+      for req in @requests
+        begin
+          req.puts msg.to_s.delete("\n") + "\0\n"
+        rescue
+        end
+      end
+    end
+  end
+  
+end
+
+class AsyncSendSocket
+  QUIT_MESSAGE = "\xff\xfe\xff\xfe"
+
+  def initialize(sock)
+    @socket = sock
+    @queue = Queue.new
+    Thread.new do
+      while @queue do
+        d = @queue.pop
+        break if d == QUIT_MESSAGE
+        begin
+          @socket.print d.chomp
+          @socket.flush
+        rescue
+          p "failed to send: #{$!.message}" if $DEBUG
+          break
+        end
+      end
+      close_priv
+      p 'send thread: bye...' if $DEBUG
+    end
+  end
+
+  def puts(d)
+    @queue.push d
+  end
+
+  def gets
+    begin
+      return @socket.gets
+    rescue    
+      p "failed to recv: #{$!.message}" if $DEBUG
+    end
+    nil
+  end
+
+  def peeraddr
+    @socket.peeraddr
+  end
+
+  def close
+    @queue.push QUIT_MESSAGE
+    close_priv
+  end
+
+  private
+
+  def close_priv
+    if @socket
+      begin
+        @socket.close
+      rescue
+      end
+      @socket = nil
+    end
+  end
+end
+
+class Request
+  attr_accessor :num_subscribes
+  attr_reader :socket, :unparsed_socket, :broadcast, :json_parsed_socket, :channels, :fatal_error, :ip, :message, :secret
+  
+  def initialize(socket, logger)
+    @logger = logger
+    @num_subscribes=0 # how many channels is the request subscribing to?
+    @socket = AsyncSendSocket.new(socket)  #open socket connection to the client
+    @fatal_error = false
+    @unparsed_socket = ""
+    @broadcast = false
+    @json_parsed_socket = ""
+    @channels = {}
+    @message = ""
+    @ip = ""
+
+    begin
+      line = @socket.gets
+      @unparsed_socket << line
+      @logger.log(@unparsed_socket)
+      @json_parsed_socket = JSON.parse(@unparsed_socket)
+      @channels = @json_parsed_socket["channels"]
+      if @json_parsed_socket["broadcast"] == 1 # Assume broadcast message
+        @broadcast = true
+        @message = @json_parsed_socket["message"]
+        @secret = @json_parsed_socket["secret"]
+      end
+      @logger.log("JS Parsed everything") if $DEBUG
+        
+      @ip = @socket.peeraddr[3]
+    rescue Exception
+      @fatal_error = true;
+    end #begin
+     
+  end #initialize
+
+  def gets
+    @socket.gets
+  end
+
+  def puts(d)
+    @socket.puts(d)
+  end
+
+  def destroy
+    @logger.log("destroy request from #{@ip}")
+    @socket.close
+  end
+   
+end
+
+class PushServer < Monitor
+
+  def initialize
+    @logger = Logger.new("#{RAILS_ROOT}/log/push_server.log", 2, 10*1024)
+    @hostname = APP_CONFIG["PUSH_HOST"]
+    @port = APP_CONFIG["PUSH_PORT"]
+    
+    log "Starting server..."
+    @socket = TCPserver.new(@hostname, @port)
+    addr = @socket.addr 
+    addr.shift 
+    log("Server is on...\nIP:\t#{addr[2]}\nPort:\t#{addr[0]}\nComputer Name:\t#{addr[1]}\nAllowed IP for rails:\t#{APP_CONFIG['PUSH_ALLOWED_IP']}\n")
+    
+    @channels = {}
+    
+    super()
+  end  
+  
+  def create_channel name
+    synchronize do
+      @channels[name.to_s]=Channel.new(name)
+    end
+  end
+
+  
+  def serve
+    log "Serving..."
+    while (socket = @socket.accept)
+      Thread.start do 
+        req = Request.new(socket, self)
+        if req.broadcast == true
+          log "Broadcasting... : \t #{req.ip}"
+          handle_broadcast req
+          log "Broadcasted message from : \t #{req.ip}"
+        else
+          log "Listening... : \t #{req.ip}"
+          handle_listen req
+        end
+        req.destroy
+        log "Closed listen request from ip: #{req.ip}"
+      end
+    end
+  end
+
+  
+  def handle_listen req
+
+    for cha in req.channels
+      if @channels[cha]
+        log "Already channel: #{cha}"
+      else
+        create_channel cha
+        log "Created channel: #{cha}"
+      end
+      
+      log "Subscribing..."
+      @channels[cha].subscribe(req)
+      log "Subscribed request to channels: #{req.ip}"
+    end
+    
+    while line = req.gets
+      log "read: #{line}" if $DEBUG
+      pong req, line
+    end
+  
+    for cha in req.channels
+      @channels[cha].unsubscribe(req)
+    end
+    time = Time.now.strftime(" %H:%M:%S ")
+    broadcast(req, "<li class=\"comment\"><strong>System </strong><span>#{time}</span> User Removed (Active: #{@channels.values.inject(0){|sum,e|sum + e.number_requests}})</li>")
+
+    log "Unsubscribed from channels: #{req.ip}"
+  
+  end
+
+  def pong req, line
+    return unless line =~ /^[^\w]*{.*?}[^\w]*$/
+    parsed = JSON.parse(line.strip.gsub(/\0/, ''))
+    if parsed['ping'] == 1
+      pong = { :pong => 1, :message => parsed['message'] }
+      req.puts "#{pong.to_json}\0\n"
+    end
+  end
+  
+  def handle_broadcast req
+    if req.secret != APP_CONFIG["PUSH_SECRET"]
+      log "Unauthorised broadcast attempt with ip: #{req.ip}"
+    else
+      broadcast req
+    end
+  end
+  
+  def log(text)
+    puts text
+    @logger.info(text)
+  end
+  
+  def shutdown
+    log("Shutting down...")
+    exit
+  end
+
+  private
+
+  def broadcast(req, msg = nil)
+    if msg
+      msg = Base64.encode64(msg)
+    else
+      msg = req.message
+    end
+    for cha in req.channels
+      if @channels[cha]
+        log "Already channel: #{cha}" if $DEBUG
+      else
+        create_channel cha
+        log "Created channel: #{cha}"
+      end
+      log "Sending..." if $DEBUG
+      @channels[cha].send_message(msg, req)
+      log "Sent" if $DEBUG
+    end
+  end
+
+end
+
+
+push = PushServer.new
+trap("INT"){ push.shutdown }
+push.serve

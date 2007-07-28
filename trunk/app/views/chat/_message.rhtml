@@ -1,0 +1,33 @@
+<li class="<%= css_class_name(message) %>" title="<%= h(message.name)+' '+
+    message.created_at.strftime("%Y/%m/%d %H:%M:%S")+
+    ' #m'+message.id.to_s %>" <%= "id=\"m#{message.id}\"" %>>
+  <strong><%= h message.name %></strong>
+  <span><%= link_to_if(message.permlinkable?, 
+                       message.created_at.strftime(" %H:%M:%S "),
+                       :controller => 'archive', 
+                       :action     => 'show',
+                       :id         => message ) %></span>
+  <%=
+      html = auto_link_and_img(message.message, :all, :target => '_blank')
+      # html = message.message
+
+      if message.attachment
+        if message.attachment.content_type == 'rb'
+          html << link_to('Download', {:controller => 'attachment',
+                                       :action     => 'download',
+                                       :id         => message.attachment},
+                                       :class      => 'attachment')
+          html << link_to('View',     {:controller => 'attachment',
+                                       :action     => 'show',
+                                       :id         => message.attachment},
+                                      {:class      => 'attachment',
+                                       :target     => '_blank'})
+          html << convert_syntax(message.attachment.body)
+        else
+          html << simple_format2(message.attachment.body, :all, :target => '_blank')
+        end
+      else
+        html
+      end
+   %>
+</li>

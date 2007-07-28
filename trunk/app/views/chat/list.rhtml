@@ -1,0 +1,14 @@
+<%- @subtitles = " - Log Archives" -%>
+<ul>
+<%= render :partial => "message", :collection => @messages %>
+</ul>
+
+<div class="controls">
+  <%= link_to '&laquo; Previous', 
+     { :page => @messages_pages.current.previous },
+     { :class => "previous" } if @messages_pages.current.previous %>
+  <%= pagination_links @messages_pages, :window_size => 5 %>
+  <%= link_to 'Next &raquo;', 
+     { :page => @messages_pages.current.next }, 
+     { :class => "next" } if @messages_pages.current.next %> 
+</div>
