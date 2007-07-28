@@ -1,0 +1,31 @@
+
+<% form_tag({:action => 'send_data'}, :id => 'chat_form') do %>
+ <div class="controls inputs">
+    <span id="namearea"><%= text_field_tag 'name', 'Name', { :maxlength => '10' } %></span>
+    <%= text_field_tag( 'chat_input', 'Please, input the message', { :id => 'chat_input'} ) %>
+    <%= image_submit_tag "add_btn.gif", { :id => 'submit', :title => 'add' } %>
+  </div>
+  <div id="extension">
+    <div class="multiline">
+      <%= text_area_tag( 'attachment', nil, { :id => 'attachment'} ) %>
+    </div>
+  </div>
+  <div id="multiline_bar">
+    <a href="#">options</a>
+  </div>
+<% end %>
+
+<ul id="chat_data">
+<%= render :partial => "message", :collection => @messages %>
+</ul>
+
+<div class="controls">
+  <%= link_to 'Log Archives',   {:controller => 'archive', 
+                                 :action     => 'list'}, 
+                                 :target     => '_blank' %>
+  <%= link_to 'Daily Archives', {:controller => 'archive', 
+                                 :action     => 'daily'},
+                                 :target     => '_blank' %>
+</div>
+
+<%= flash_plugin(session[:juggernaut_channels]) %>

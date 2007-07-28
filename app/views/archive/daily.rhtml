@@ -1,0 +1,31 @@
+<%- 
+    current_day = @current_day.strftime("%Y.%m.%d")
+    @subtitles = " - Daily Archives - " + current_day
+    previous_link = link_to '&laquo; Previous Day', 
+                    { :year  => @previous_day.year, 
+                      :month => @previous_day.month, 
+                      :day   => @previous_day.day },
+                    { :class => "previous",
+                      :rel => "next" }
+    next_link = link_to 'Next Day &raquo;', 
+                    { :year  => @next_day.year, 
+                      :month => @next_day.month, 
+                      :day   => @next_day.day },
+                    { :class => "next" }
+-%>
+
+<div class="controls head">
+  <%= previous_link %>
+  <%= current_day %>
+  <%= next_link %>
+</div>
+
+<ul class="autopagerize_page_element">
+<%= render :partial => "chat/message", :collection => @messages %>
+</ul>
+
+<div class="controls autopagerize_insert_before">
+  <%= previous_link %>
+  <%= current_day %>
+  <%= next_link %>
+</div>

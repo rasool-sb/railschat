@@ -1,0 +1,38 @@
+--- JavaScriptProxy.as.orig	Mon Jun 13 15:28:08 2005
++++ JavaScriptProxy.as	Tue Aug 15 01:01:07 2006
+@@ -146,10 +146,11 @@
+ 	*/
+ 	public function __resolve(functionName:String):Function
+ 	{		
++        	var callRef:Function = call;
+ 		var f:Function = function()
+ 		{
+ 			arguments.splice(0,0, functionName);
+-			var f:Function = call;
++			var f:Function = callRef;
+ 			f.apply(this, arguments);		
+ 		};
+ 		
+--- JavaScriptSerializer.as.orig	Mon Jun 13 15:28:08 2005
++++ JavaScriptSerializer.as	Tue Aug 15 01:02:16 2006
+@@ -285,7 +285,7 @@
+ 	} 	
+ 	
+ 	/* Deserializes a Boolean Value */
+-	public static function deserializeBoolean(s:String):String
++	public static function deserializeBoolean(s:String):Boolean
+ 	{
+ 		return Boolean(s);
+ 	} 	
+@@ -455,9 +455,9 @@
+ 					arr = o[varName];
+ 				}	
+ 				
+-				for(var x:Number = 0; x < len; x++)
++				for(var y:Number = 0; y < len; y++)
+ 				{
+-					arr.push(parseNode(children[x], o));
++					arr.push(parseNode(children[y], o));
+ 				}
+ 				 	
+ 				return arr;

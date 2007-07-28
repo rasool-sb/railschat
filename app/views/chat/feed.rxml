@@ -1,0 +1,32 @@
+xml.instruct!
+xml.rss "version" => "2.0", 
+        "xmlns:dc" => "http://purl.org/dc/elements/1.1/" do
+  xml.channel do
+    xml.title "Rails Chat"
+    xml.link url_for(:only_path => false, 
+                     :controller => 'chat', 
+                     :action => 'index')
+    xml.pubDate CGI.rfc1123_date(@messages.first.created_at)
+    xml.description "Rails Chat"
+    @messages.each do |item|
+      xml.item do
+        xml.title h(item.name)
+        xml.link url_for(:only_path => false, 
+                         :controller => 'chat', 
+                         :action => 'show',
+                         :id => item)
+        if item.attachment
+          xml.description auto_link_and_img(item.message)+simple_format2(item.attachment.body)
+        else
+          xml.description auto_link_and_img(item.message)
+        end
+        xml.pubDate CGI.rfc1123_date(item.created_at)
+        xml.guid url_for(:only_path => false, 
+                         :controller => 'chat',
+                         :action => 'show',
+                         :id => item)
+        xml.author h(item.name)
+      end
+    end
+  end
+end
